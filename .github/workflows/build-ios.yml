@@ -1,0 +1,96 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Install CocoaPods
+      run: |
+        cd ios
+        pod install
+        cd ..
+    
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+    
+    - name: Build Archive
+      run: |
+        xcodebuild -workspace ios/SignerApp.xcworkspace \
+          -scheme SignerApp \
+          -configuration Release \
+          -archivePath build/SignerApp.xcarchive \
+          clean archive
+    
+    - name: Create Export Options
+      run: |
+        cat > exportOptions.plist << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>method</key>
+            <string>development</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>compileBitcode</key>
+            <false/>
+        </dict>
+        </plist>
+        EOF
+    
+    - name: Export IPA
+      run: |
+        xcodebuild -exportArchive \
+          -archivePath build/SignerApp.xcarchive \
+          -exportPath build \
+          -exportOptionsPlist exportOptions.plist
+    
+    - name: Upload IPA
+      uses: actions/upload-artifact@v3
+      with:
+        name: SignerApp-IPA
+        path: build/*.ipa
+        
+    - name: Create Release
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: build/*.ipa
+        tag_name: v${{ github.run_number }}
+        name: Release v${{ github.run_number }}
+        body: |
+          Automated build of IPA Signer Pro
+          
+          ## Installation
+          1. Download the IPA file
+          2. Install using AltStore or Sideloadly
+          3. Open the app on your iPhone
+          
+          ## What's New
+          - Automated build from GitHub Actions
+          - Ready to sideload
+          
+          **Note**: This app uses private APIs and must be sideloaded.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
