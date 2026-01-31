@@ -67,7 +67,7 @@ jobs:
           -exportOptionsPlist exportOptions.plist
     
     - name: Upload IPA
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: SignerApp-IPA
         path: build/*.ipa
